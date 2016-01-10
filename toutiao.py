@@ -6,6 +6,7 @@
 import sys
 import urllib2
 import re
+import datetime
 from bs4 import BeautifulSoup
 default_encoding = 'utf-8'
 if sys.getdefaultencoding() != default_encoding:
@@ -19,30 +20,36 @@ class ToutiaoMain(object):
 		
 		page = 1
 		total = 26
-		print "启动爬虫..."
-		while page < total:
+		while (page < total):
 			full_url = url % (page)
 			subject_content = self.download(full_url)
 			if subject_content is None:
 				break
 			subject_datas = self.parseSubject(subject_content)
+			if subject_datas is None:
+				break;
 			fout = open("toutiao.io/subjects_%d.md" % page, 'a+')
 			fout.write("#开发者头条 第 %d 页\n" % page)
 			fout.close()
-			print "爬取第 %s 页数据..." % page
+			print "%s 爬取第 %s 页数据..." % (datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),page)
 			for key in subject_datas:
-				post_content = self.download(subject_datas[key]['url'])
-				post_datas = self.parsePost(post_content)
-				if len(post_datas) == 0:
-					continue
+				post_page = 1
+				while 1:
+					post_url = "%s?page=%d" % (subject_datas[key]['url'], post_page);
+					post_content = self.download(post_url)
+					print post_url
+					if post_content is None:
+						break;
 
-				datas = {}
-				datas['subject'] = subject_datas[key]['title']
-				datas['url'] = subject_datas[key]['title']
-				datas['posts'] = post_datas
-				self.outputMarkdown(datas, page)
+					post_data = self.parsePost(post_content, post_page)
+					if post_data is None:
+						break;
+
+					print "%s 爬到主题: %s 第 %d 页" % (datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), subject_datas[key]['title'].encode('utf-8'),post_page)
+					self.outputMarkdown(post_data, subject_datas[key], page, post_page)
+					post_page = post_page + 1
+
 			page = page + 1
-		print "爬虫任务结束..."
 	# 下载
 	def download(self, url):
 			
@@ -66,22 +73,28 @@ class ToutiaoMain(object):
 		subject_datas = {}
 		soup = BeautifulSoup(content, 'html.parser', from_encoding='utf-8')
 		subjects = soup.find_all('a', href=re.compile(r"/subjects/\d+"))
+		if len(subjects) < 1:
+			return None
 		num = 1
 		for subject in subjects:
 			subject_data = {}
 			subject_data['title'] = subject.get_text()
-			subject_data['url'] = "http://toutiao.io/%s" % subject['href']
+			subject_data['url'] = "http://toutiao.io%s" % subject['href']
 			key = "subject%d" % num
 			subject_datas.setdefault(key, subject_data)
 			num = num + 1
 		return subject_datas
 
 	# 解析文章
-	def parsePost(self, content):
+	def parsePost(self, content, post_page):
 		post_datas = {}
 		soup = BeautifulSoup(content, 'html.parser', from_encoding='utf-8')
 		posts = soup.find_all('div', class_="post")
-		num = 1
+		count = len(posts)
+		if count < 1:
+			return None
+
+		num = (post_page - 1) * count + 1
 		for post in posts:
 			temp = post.find('h3', class_="title").find('a')
 			post_data = {}
@@ -93,12 +106,12 @@ class ToutiaoMain(object):
 		return post_datas
 
 	# 输出markdown格式
-	def outputMarkdown(self, datas, page):
+	def outputMarkdown(self, post_data, subject_data, page, post_page):
 		fout = open("toutiao.io/subjects_%d.md" % page, 'a+')
 		fout.write("----------------\n")
-		fout.write("##[%s](%s)\n" % (datas['subject'].encode('utf-8'), datas['url']))
-		for key in datas['posts']:
-			line = "-	[%s](%s)\n"%(datas['posts'][key]['title'].encode('utf-8'), datas['posts'][key]['url'])
+		fout.write("##[%s 第 %d 页](%s)\n" % (subject_data['title'].encode('utf-8'), post_page, subject_data['url']))
+		for key in post_data:
+			line = "-	[%s](%s)\n"%(post_data[key]['title'].encode('utf-8'), post_data[key]['url'])
 			fout.write(line)
 			fout.write("\n")
 		fout.close()
@@ -107,4 +120,7 @@ class ToutiaoMain(object):
 if __name__ == '__main__':
 	root_url = "http://toutiao.io/explore?page=%d"
 	obj_spider = ToutiaoMain()
+	print "%s 启动爬虫..." % datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 	obj_spider.craw(root_url)
+	print "%s 爬虫任务结束..." % datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+	exit()

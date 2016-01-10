@@ -33,3 +33,8 @@
 	if sys.getdefaultencoding() != default_encoding:
 	    reload(sys)
 	    sys.setdefaultencoding(default_encoding)
+
+###2016-1-11更新
+- 优化代码结构
+- 可抓取全量数据
+- 打印日志
